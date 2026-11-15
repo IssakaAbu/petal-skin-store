@@ -205,9 +205,10 @@ body{padding-bottom:60px}.ah{display:flex;align-items:center;gap:12px;padding:16
 <div class="box" id="login"><h2>Seller login</h2><input id="em" type="email" placeholder="Admin email" autocomplete="username"><input id="pw" type="password" placeholder="Password" autocomplete="current-password"><button class="btn" id="loginBtn">Sign in</button></div>
 <div id="dash" hidden>
 <div class="stats"><div><b id="st-o">0</b>New orders</div><div><b id="st-p">0</b>Products</div><div><b id="st-l">0</b>Low stock (≤5)</div></div>
-<div class="tabs"><button class="chip on" data-tab="orders">Orders</button><button class="chip" data-tab="chats">Chats</button><button class="chip" data-tab="products">Products</button><button class="chip" data-tab="settings">Settings</button></div>
+<div class="tabs"><button class="chip on" data-tab="orders">Orders</button><button class="chip" data-tab="history">History</button><button class="chip" data-tab="chats">Chats</button><button class="chip" data-tab="products">Products</button><button class="chip" data-tab="settings">Settings</button></div>
 <section class="pan on" id="t-orders"><div id="olist"></div></section>
-<section class="pan" id="t-chats"><div class="chats"><div id="clist"></div><div id="thread" hidden><b id="tn"></b><div class="msgs" id="tmsgs" style="height:300px;border-radius:12px;margin:8px 0"></div><div class="cin" style="padding:0"><input id="rm" placeholder="Reply…"><button class="btn sm" id="rsend">Reply</button></div></div></div></section>
+<section class="pan" id="t-history"><div class="acts" style="margin-bottom:10px"><button class="btn o sm" id="csv">Download CSV</button> <button class="btn o sm" id="bf">Save confirmed orders to History</button></div><div id="hlist"></div></section>
+<section class="pan" id="t-chats"><div class="chats"><div id="clist"></div><div id="thread" hidden><b id="tn"></b> <button class="btn o sm" id="delchat" style="float:right">Delete chat</button><div class="msgs" id="tmsgs" style="height:300px;border-radius:12px;margin:8px 0"></div><div class="cin" style="padding:0"><input id="rm" placeholder="Reply…"><button class="btn sm" id="rsend">Reply</button></div></div></div></section>
 <section class="pan" id="t-products"><div class="two"><div><h3 id="formT">Add product</h3><div class="fgrid">
 <div class="full"><label>Name</label><input id="pn"></div><div><label>Price (GH₵)</label><input id="pp" type="number" min="0" step="0.01"></div><div><label>Stock quantity</label><input id="ps" type="number" min="0" value="10"></div>
 <div><label>Category</label><select id="pc"><option>Skincare</option><option>Deodorants</option></select></div><div><label>Emoji (if no photo)</label><input id="pe" value="🧴"></div>
@@ -224,7 +225,7 @@ body{padding-bottom:60px}.ah{display:flex;align-items:center;gap:12px;padding:16
 </div></div><div class="toast" id="toast"></div>
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import {getFirestore,collection,doc,setDoc,deleteDoc,updateDoc,onSnapshot,addDoc,serverTimestamp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import {getFirestore,collection,doc,setDoc,deleteDoc,updateDoc,onSnapshot,addDoc,serverTimestamp,getDocs} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import {getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 const $=s=>document.querySelector(s),cfg=window.PETAL_CONFIG;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -237,7 +238,7 @@ const byT=(a,b)=>(a.t?.seconds||0)-(b.t?.seconds||0),er=()=>{};
 const thumb=p=>p.img?`<img src="${p.img}" alt="">`:esc(p.emoji||'🧴');
 const bub=(m,me)=>`<div class="mb ${me?'mine':'other'}">${esc(m.text)}</div>`;
 function beep(){try{const c=new (window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=880;g.gain.value=.15;o.start();o.stop(c.currentTime+.3)}catch(e){}}
-let un=[],P=[],O=[],curC=null,uT=null,editId=null,img='';
+let un=[],P=[],O=[],H=[],curC=null,uT=null,editId=null,img='';
 onAuthStateChanged(auth,u=>{const ad=!!u&&!u.isAnonymous;$('#login').hidden=ad;$('#dash').hidden=!ad;$('#out').hidden=!ad;ad?start():stop()});
 $('#loginBtn').onclick=async()=>{try{await signInWithEmailAndPassword(auth,$('#em').value.trim(),$('#pw').value)}catch(e){toast('Wrong email or password')}};
 $('#pw').onkeydown=e=>{if(e.key==='Enter')$('#loginBtn').click()};
@@ -247,13 +248,14 @@ function start(){if(un.length)return;let f1=true,f2=true;un=[
  onSnapshot(doc(db,'settings','store'),s=>{const d=s.data()||{};if(document.activeElement.closest('#t-settings'))return;$('#wa').value=d.wa||'';$('#mn').value=d.momoNumber||'';$('#mname').value=d.momoName||'';$('#mnet').value=d.momoNet||'MTN MoMo';$('#cod').checked=d.cod!==false;$('#pk').value=d.paystackKey||''},er),
  onSnapshot(collection(db,'orders'),s=>{if(!f1&&s.docChanges().some(c=>c.type==='added')){beep();toast('🛍 New order received')}f1=false;
   O=s.docs.map(d=>({_id:d.id,...d.data({serverTimestamps:'estimate'})})).sort((a,b)=>byT(b,a));drawO()},er),
+ onSnapshot(collection(db,'records'),s=>{H=s.docs.map(d=>d.data()).sort((a,b)=>(b.confirmedAt||0)-(a.confirmedAt||0));drawH()},er),
  onSnapshot(collection(db,'chats'),s=>{if(!f2&&s.docChanges().some(c=>c.type!=='removed'&&c.doc.data().from==='c')){beep();toast('💬 New customer message')}f2=false;
   const c=s.docs.map(d=>({id:d.id,...d.data({serverTimestamps:'estimate'})})).sort((a,b)=>byT(b,a));
   $('#clist').innerHTML=c.length?c.map(x=>`<button class="ck cl ${x.from==='c'?'new':''}" data-chat="${x.id}"><span><b>${esc(x.name)}</b><br><small>${esc(x.last)}</small></span></button>`).join(''):'<p class="nc">No chats yet.</p>'},er)]}
 function stop(){un.forEach(f=>f());un=[];uT&&uT();uT=null}
 function drawO(){$('#st-o').textContent=O.filter(x=>x.status!=='confirmed').length;
- $('#olist').innerHTML=O.length?O.map(x=>`<div class="ord ${x.status==='confirmed'?'done':''}"><b>${esc(x.ref)}</b> · ${money(x.total)}<em>${x.status==='confirmed'?'Confirmed':'New'}</em><br>${esc(x.name)} · ${esc(x.phone)}<br><small>${esc(x.address)}${x.note?'<br>Note: '+esc(x.note):''}<br>${(x.items||[]).map(i=>i.qty+'× '+esc(i.name)).join(', ')}<br><b>Payment:</b> ${esc(x.pay||'—')}</small><div class="acts"><a class="btn o sm" target="_blank" rel="noopener" href="https://wa.me/${waNum(x.phone)}">WhatsApp customer</a>${x.status==='confirmed'?'':`<button class="btn sm" data-conf="${x._id}">Confirm &amp; reduce stock</button>`}</div></div>`).join(''):'<p class="nc">No orders yet.</p>'}
-async function confirmO(id){const x=O.find(o=>o._id===id);if(!x)return;try{for(const i of x.items||[]){const p=P.find(q=>q.id===i.id);if(p)await updateDoc(doc(db,'products',String(p.id)),{stock:Math.max(0,p.stock-i.qty)})}await updateDoc(doc(db,'orders',id),{status:'confirmed'});toast('Order confirmed, stock updated')}catch(e){toast('Failed: '+(e.code||e.message))}}
+ $('#olist').innerHTML=O.length?O.map(x=>`<div class="ord ${x.status==='confirmed'?'done':''}"><b>${esc(x.ref)}</b> · ${money(x.total)}<em>${x.status==='confirmed'?'Confirmed':'New'}</em><br>${esc(x.name)} · ${esc(x.phone)}<br><small>${esc(x.address)}${x.note?'<br>Note: '+esc(x.note):''}<br>${(x.items||[]).map(i=>i.qty+'× '+esc(i.name)).join(', ')}<br><b>Payment:</b> ${esc(x.pay||'—')}</small><div class="acts"><a class="btn o sm" target="_blank" rel="noopener" href="https://wa.me/${waNum(x.phone)}">WhatsApp customer</a>${x.status==='confirmed'?'':`<button class="btn sm" data-conf="${x._id}">Confirm &amp; reduce stock</button>`}<button class="btn o sm" data-delo="${x._id}">Delete</button></div></div>`).join(''):'<p class="nc">No orders yet.</p>'}
+async function confirmO(id){const x=O.find(o=>o._id===id);if(!x)return;try{for(const i of x.items||[]){const p=P.find(q=>q.id===i.id);if(p)await updateDoc(doc(db,'products',String(p.id)),{stock:Math.max(0,p.stock-i.qty)})}await updateDoc(doc(db,'orders',id),{status:'confirmed'});await setDoc(doc(db,'records',String(x.ref)),{ref:x.ref,name:x.name||'',phone:x.phone||'',address:x.address||'',note:x.note||'',pay:x.pay||'',items:x.items||[],total:x.total||0,orderedAt:(x.t?.seconds||0)*1000,confirmedAt:Date.now()});toast('Order confirmed, stock updated, record saved')}catch(e){toast('Failed: '+(e.code||e.message))}}
 function drawP(){$('#st-p').textContent=P.length;$('#st-l').textContent=P.filter(p=>p.stock<=5).length;
  $('#plist').innerHTML=P.length?P.map(p=>`<div class="admin-row"><div class="line" style="border:0;padding:0"><div class="t">${thumb(p)}</div></div><div class="m"><b>${esc(p.name)}</b><br>${money(p.price)} · ${esc(p.cat)}</div><input class="sq ${p.stock<=5?'low':''}" type="number" min="0" value="${p.stock}" data-sq="${p.id}" title="Stock"><button class="btn o sm" data-e="${p.id}">Edit</button><button class="btn o sm" data-del="${p.id}">✕</button></div>`).join(''):'<p class="nc">No products yet.</p>'}
 function clr(){editId=null;img='';['pn','pp','pd','pr'].forEach(i=>$('#'+i).value='');$('#ps').value=10;$('#pc').value='Skincare';$('#pe').value='🧴';$('#pf').value='';$('#formT').textContent='Add product'}
@@ -268,9 +270,24 @@ document.addEventListener('change',e=>{const id=e.target.dataset.sq;if(id)update
 document.addEventListener('click',e=>{const t=e.target.closest('button,a');if(!t)return;
  if(t.dataset.tab){document.querySelectorAll('.pan').forEach(x=>x.classList.toggle('on',x.id==='t-'+t.dataset.tab));document.querySelectorAll('.tabs .chip').forEach(x=>x.classList.toggle('on',x===t))}
  if(t.dataset.conf)confirmO(t.dataset.conf);
+ if(t.dataset.delo)delO(t.dataset.delo);
  if(t.dataset.e)editP(+t.dataset.e);
  if(t.dataset.del&&confirm('Delete this product?'))deleteDoc(doc(db,'products',t.dataset.del));
  if(t.dataset.chat)openThread(t.dataset.chat,t.querySelector('b').textContent)});
+
+const fmt=t=>t?new Date(t).toLocaleString():'';
+function drawH(){$('#hlist').innerHTML=H.length?H.map(x=>`<div class="ord"><b>${esc(x.ref)}</b> · ${money(x.total)}<em>Confirmed ${fmt(x.confirmedAt)}</em><br>${esc(x.name)} · ${esc(x.phone)}<br><small>${esc(x.address)}<br>${(x.items||[]).map(i=>i.qty+'× '+esc(i.name)).join(', ')}<br><b>Payment:</b> ${esc(x.pay||'—')}</small></div>`).join(''):'<p class="nc">Confirmed orders are kept here for your records, even after you delete them from Orders.</p>'}
+$('#csv').onclick=()=>{if(!H.length)return toast('Nothing to download yet');const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+ const rows=[['Order ref','Confirmed','Name','Phone','Address','Items','Total (GHS)','Payment'].map(q).join(',')].concat(H.map(x=>[x.ref,fmt(x.confirmedAt),x.name,x.phone,x.address,(x.items||[]).map(i=>i.qty+' x '+i.name).join('; '),x.total,x.pay].map(q).join(',')));
+ const l=document.createElement('a');l.href=URL.createObjectURL(new Blob(['\ufeff'+rows.join('\n')],{type:'text/csv'}));l.download='petal-orders.csv';l.click()};
+const saveRec=x=>setDoc(doc(db,'records',String(x.ref)),{ref:x.ref,name:x.name||'',phone:x.phone||'',address:x.address||'',note:x.note||'',pay:x.pay||'',items:x.items||[],total:x.total||0,orderedAt:(x.t?.seconds||0)*1000,confirmedAt:x.confirmedAt||Date.now()});
+$('#bf').onclick=async()=>{const m=O.filter(x=>x.status==='confirmed'&&!H.some(h=>h.ref===x.ref));if(!m.length)return toast('All confirmed orders are already saved');
+ try{for(const x of m)await saveRec(x);toast(m.length+' order(s) saved to History')}catch(e){toast('Could not save: '+(e.code||'error'))}};
+async function delO(id){const x=O.find(o=>o._id===id);if(!x)return;
+ if(!confirm(x.status==='confirmed'?'Delete this order from the list? Its record stays in History.':'Delete this order? It was not confirmed, so no record will be kept.'))return;
+ try{if(x.status==='confirmed')await saveRec(x);await deleteDoc(doc(db,'orders',id));toast('Order deleted')}catch(e){toast('Not deleted: '+(e.code||'error')+' (check your Firebase rules)')}}
+$('#delchat').onclick=async()=>{if(!curC||!confirm('Delete this whole chat? This cannot be undone.'))return;const id=curC;
+ try{uT&&uT();uT=null;const s=await getDocs(collection(db,'chats',id,'messages'));for(const d of s.docs)await deleteDoc(d.ref);await deleteDoc(doc(db,'chats',id));curC=null;$('#thread').hidden=true;toast('Chat deleted')}catch(e){toast('Could not delete chat')}};
 function openThread(id,name){curC=id;$('#thread').hidden=false;$('#tn').textContent=name;uT&&uT();
  uT=onSnapshot(collection(db,'chats',id,'messages'),s=>{$('#tmsgs').innerHTML=s.docs.map(d=>d.data({serverTimestamps:'estimate'})).sort(byT).map(m=>bub(m,m.from==='s')).join('');$('#tmsgs').scrollTop=1e9},er)}
 async function reply(){const i=$('#rm'),text=i.value.trim();if(!text||!curC)return;i.value='';
