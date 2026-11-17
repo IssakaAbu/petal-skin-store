@@ -355,7 +355,7 @@ $('#checkout').onclick=()=>{
  const ref='PSBC-'+Date.now().toString(36).toUpperCase(),pm=($('input[name=pay]:checked')||{}).value||'cod';
  const place=pay=>{
   const msg='*New order '+ref+'*\n'+items.map(i=>'• '+i.qty+' x '+i.name+' – '+money(i.price*i.qty)).join('\n')+'\n*Total: '+money(tot)+'*\n*Payment: '+pay+'*\n\nName: '+nm+'\nPhone: '+ph+'\nDelivery: '+ad+(nt?'\nNote: '+nt:'');
-  if(DB)addDoc(collection(db,'orders'),{ref,name:nm,phone:ph,email:em,address:ad,note:nt,pay,items,total:tot,t:serverTimestamp()}).catch(()=>{});
+  if(DB)addDoc(collection(db,'orders'),{ref,name:nm,phone:ph,email:em,address:ad,note:nt,pay,items,total:tot,uid:myUid||'',t:serverTimestamp()}).catch(()=>{});
   const url='https://wa.me/'+to+'?text='+encodeURIComponent(msg);
   $('#bagview').hidden=true;$('#doneview').hidden=false;$('#sumtxt').textContent=msg;$('#waGo').href=url;
   cart=[];renderCart();
